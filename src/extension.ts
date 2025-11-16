@@ -1,81 +1,91 @@
 import * as vscode from 'vscode';
+import OpenAI from "openai";
 
-type ReplaceGuess = { X: string; Y: string; count: number };
+const SECRET_KEY_NAME = 'openai.apiKey';
 
-function normalizeText(src: string): string {
-  return src
-    .split(/\r?\n/)               // tách từng dòng
-    .map(line => line.trim())     // bỏ khoảng trắng 2 đầu
-    .filter(line => line.length > 0) // bỏ dòng trống
-    .join("\n");                  // ghép lại
-}
+export async  function activate(context: vscode.ExtensionContext) {
+	console.log('OpenAI example extension active');
 
-function simpleCharReplace(A: string, B: string, maxLen?: number): ReplaceGuess {
-  if (A === B) return { X: "", Y: "", count: 0 };
-  const n = A.length;
-  const limit = typeof maxLen === "number" ? Math.min(maxLen, n) : n;
-  const seen = new Set<string>();
+  	const disposableSetKey = vscode.commands.registerCommand('extension.setOpenAIKey', async () => {
+    const key = await vscode.window.showInputBox({
+			placeHolder: 'Paste your OpenAI API key (sk-...)',
+			ignoreFocusOut: true,
+			password: true
+		});
+		if (!key) {
+			vscode.window.showWarningMessage('No key provided.');
+			return;
+		}
+		await context.secrets.store(SECRET_KEY_NAME, key);
+		vscode.window.showInformationMessage('OpenAI API key saved to VSCode Secret Storage.');
+	});
 
-  for (let len = 1; len <= limit; len++) {
-    for (let start = 0; start + len <= n; start++) {
-      const X = A.substring(start, start + len);
-      if (seen.has(X)) continue;
-      seen.add(X);
-
-      const parts = A.split(X);
-      if (parts.length === 1) continue; // X không xuất hiện
-
-      const k = parts.length;
-      const sumPartsLen = parts.reduce((s, p) => s + p.length, 0);
-      const totalYLen = B.length - sumPartsLen;
-      if (totalYLen < 0) continue;
-      if (k - 1 === 0) continue;
-      if (totalYLen % (k - 1) !== 0) continue; // độ dài Y phải đều cho các vị trí
-
-      const lenY = Math.floor(totalYLen / (k - 1));
-      const startY = parts[0].length;
-      const Y = lenY > 0 ? B.substring(startY, startY + lenY) : "";
-
-      // rebuild and compare
-      let rebuilt = parts[0];
-      for (let i = 1; i < k; i++) {
-        rebuilt += Y + parts[i];
-      }
-      if (rebuilt === B) {
-        // count occurrences (non-overlapping, tương ứng với split)
-        const count = parts.length - 1;
-        return { X, Y, count };
-      }
-    }
-  }
-
-  // Không tìm được X ngắn hơn -> replace toàn bộ
-  return { X: A, Y: B, count: 1 };
-}
-
-export function activate(context: vscode.ExtensionContext) {
-	console.log('Congratulations, your extension "simple-check-replace" is now active!');
-
-	let disposable = vscode.commands.registerCommand('extension.compareWithClipboard', async () => {
+	let disposable = vscode.commands.registerCommand('extension.callOpenai', async () => {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor) return;
 
-		const selection = editor.document.getText(editor.selection);
-		const clipboard = await vscode.env.clipboard.readText();
+		const functionList = [
+			{
+				"name": "calculate_total",
+				"language": "python",
+				"indent": 4,
+				"code": "def calculate_total(items):\n    total = sum(i.price for i in items)\n    return total"
+			},
+			{
+				"name": "handle_request",
+				"language": "typescript",
+				"indent": 0,
+				"code": "export function handleRequest(req: Request) {\n  return process(req.body);\n}"
+			}
+		]
 
-		const result = simpleCharReplace(normalizeText(selection), normalizeText(clipboard), 1000);
+		try {
+			const apiKey = await context.secrets.get(SECRET_KEY_NAME);
+			const client = new OpenAI({ apiKey }); // SDK client
 
-		const output = vscode.window.createOutputChannel("Compare Result");
-		output.clear();
-		output.appendLine(`[Replace]:`);
-    output.appendLine(`${result.X}`);
-    output.appendLine(`[With]:`);
-    output.appendLine(`${result.Y}`);
-		output.appendLine(`Count = ${result.count}`);
-		output.show(true);
+			const response = await client.responses.create({
+				model: "gpt-4.1",
+				input: `
+				You are a tool for generating docstrings for multiple functions in a source file.
+
+				IMPORTANT RULES:
+				- You MUST NOT modify the function code.
+				- You MUST NOT rewrite, reorder, reformat, or fix any code.
+				- You MUST NOT output the full file.
+				- ONLY generate docstrings.
+				- For each function, return a JSON object containing:
+				- "name": the function name
+				- "can_generate": true | false
+				- "reason": explain if cannot generate
+				- "docstring": the exact docstring text (without indentation)
+				- "indent": number of spaces to indent the docstring (so the editor can insert it)
+				
+				Additional rules:
+				- Infer parameter types if possible.
+				- Keep docstrings concise but meaningful.
+
+				Now generate docstrings for the following list of functions:
+
+				${JSON.stringify(functionList, null, 2)}
+				`,			
+				// reasoning: { effort: "medium" },
+				// max_output_tokens: 200
+				});
+
+			const answer = response.output_text ?? '<no answer>';
+			const output = vscode.window.createOutputChannel("Call API");
+			output.clear();
+			output.appendLine(`--------------------[answer1]--------------------`);
+			output.appendLine(answer);
+			output.show(true);
+
+		} catch (err: any) {
+			console.error('OpenAI call failed:', err);
+			vscode.window.showErrorMessage(`OpenAI error: ${err.message ?? String(err)}`);
+		}
 	});
 
-	context.subscriptions.push(disposable);
+	context.subscriptions.push(disposableSetKey, disposable);
 }
 
 export function deactivate() {}

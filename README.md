@@ -1,7 +1,7 @@
-# simple-check-replace README
+# call-openai README
 
-README for your extension "simple-check-replace". 
+README for your extension "call-openai". 
 
 ## Features
 
-Features of your extension "simple-check-replace". 
+Features of your extension "call-openai". 

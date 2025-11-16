@@ -1,8 +1,8 @@
 {
-  "name": "simple-check-replace",
-  "displayName": "simple-check-replace",
-  "description": "VS Code extension simple-check-replace",
-  "version": "0.0.5",
+  "name": "call-openai",
+  "displayName": "call-openai",
+  "description": "VS Code extension call-openai",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.104.0"
   },
@@ -14,14 +14,18 @@
   "contributes": {
     "commands": [
       {
-        "command": "extension.compareWithClipboard",
-        "title": "Hello World"
+        "command": "extension.setOpenAIKey",
+        "title": "Set OpenAI API Key"
+      },
+      {
+        "command": "extension.callOpenai",
+        "title": "Ask OpenAI"
       }
     ],
     "keybindings": [
       {
-        "command": "extension.compareWithClipboard",
-        "key": "ctrl+alt+k",
+        "command": "extension.callOpenai",
+        "key": "ctrl+alt+/",
         "when": "editorTextFocus"
       }
     ]
@@ -35,14 +39,18 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.104.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/vscode": "^1.104.0",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
-    "eslint": "^9.34.0",
-    "typescript": "^5.9.2",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.34.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^6.9.0"
   }
 }
